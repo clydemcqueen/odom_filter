@@ -50,7 +50,7 @@ void to_R(const std::array<double, 36> &in, Eigen::MatrixXd &out)
 }
 
 // Extract pose from state
-void x_to_pose(const Eigen::MatrixXd &in, geometry_msgs::msg::Pose &out)
+void pose_from_x(const Eigen::MatrixXd &in, geometry_msgs::msg::Pose &out)
 {
   out.position.x = in(0, 0);
   out.position.y = in(1, 0);
@@ -65,8 +65,18 @@ void x_to_pose(const Eigen::MatrixXd &in, geometry_msgs::msg::Pose &out)
   out.orientation = tf2::toMsg(q);
 }
 
+// Extract pose from state
+void pose_from_x(const Eigen::MatrixXd &in, tf2::Transform &out)
+{
+  out.setOrigin(tf2::Vector3(in(0, 0), in(1, 0), in(2, 0)));
+
+  tf2::Matrix3x3 m;
+  m.setRPY(in(3, 0), in(4, 0), in(5, 0));
+  out.setBasis(m);
+}
+
 // Extract velocity from state
-void x_to_twist(const Eigen::MatrixXd &in, geometry_msgs::msg::Twist &out)
+void twist_from_x(const Eigen::MatrixXd &in, geometry_msgs::msg::Twist &out)
 {
   out.linear.x = in(6, 0);
   out.linear.y = in(7, 0);
@@ -77,8 +87,8 @@ void x_to_twist(const Eigen::MatrixXd &in, geometry_msgs::msg::Twist &out)
   out.angular.z = in(11, 0);
 }
 
-// Extract pose covariance from state covariance
-void P_to_pose(const Eigen::MatrixXd &in, std::array<double, 36> &out)
+// Extract pose covariance
+void pose_covar_from_P(const Eigen::MatrixXd &in, std::array<double, 36> &out)
 {
   for (int i = 0; i < MEASUREMENT_DIM; i++) {
     for (int j = 0; j < MEASUREMENT_DIM; j++) {
@@ -87,8 +97,8 @@ void P_to_pose(const Eigen::MatrixXd &in, std::array<double, 36> &out)
   }
 }
 
-// Extract velocity covariance from state covariance
-void P_to_twist(const Eigen::MatrixXd &in, std::array<double, 36> &out)
+// Extract velocity covariance
+void twist_covar_from_P(const Eigen::MatrixXd &in, std::array<double, 36> &out)
 {
   for (int i = 0; i < MEASUREMENT_DIM; i++) {
     for (int j = 0; j < MEASUREMENT_DIM; j++) {
@@ -97,36 +107,24 @@ void P_to_twist(const Eigen::MatrixXd &in, std::array<double, 36> &out)
   }
 }
 
-// Extract pose from state
-void x_to_pose(const Eigen::MatrixXd &in, geometry_msgs::msg::Vector3 &out_t, geometry_msgs::msg::Quaternion &out_q)
-{
-  out_t.x = in(0, 0);
-  out_t.y = in(1, 0);
-  out_t.z = in(2, 0);
-
-  tf2::Matrix3x3 m;
-  m.setRPY(in(3, 0), in(4, 0), in(5, 0));
-
-  tf2::Quaternion q;
-  m.getRotation(q);
-
-  out_q = tf2::toMsg(q);
-}
-
 //==================================================================
 // Class FilterNode
 //==================================================================
 
 FilterNode::FilterNode():
   Node{"filter_node"},
-  mission_{false},
   filter_{STATE_DIM, MEASUREMENT_DIM}
 {
   cxt_.load_parameters(*this);
 
-  tf2::Quaternion q;
-  q.setEuler(cxt_.t_sensor_base_yaw_, cxt_.t_sensor_base_pitch_, cxt_.t_sensor_base_roll_);
-  t_sensor_base_ = tf2::Transform(q, tf2::Vector3(cxt_.t_sensor_base_x_, cxt_.t_sensor_base_y_, cxt_.t_sensor_base_z_));
+  // Get t_sensor_base from parameters
+  if (cxt_.sub_pose_ || cxt_.pub_tf_map_sensor_) {
+    tf2::Vector3 t{cxt_.t_sensor_base_x_, cxt_.t_sensor_base_y_, cxt_.t_sensor_base_z_};
+    tf2::Quaternion q;
+    q.setEuler(cxt_.t_sensor_base_yaw_, cxt_.t_sensor_base_pitch_, cxt_.t_sensor_base_roll_);
+    t_sensor_base_ = tf2::Transform(q, t);
+    t_base_sensor_ = t_sensor_base_.inverse();
+  }
 
   // Measurement function
   Eigen::MatrixXd H(MEASUREMENT_DIM, STATE_DIM);
@@ -143,14 +141,41 @@ FilterNode::FilterNode():
   filter_.set_Q(Eigen::MatrixXd::Identity(STATE_DIM, STATE_DIM) * 0.0001);
 
   // Publications
-  filtered_odom_pub_ = create_publisher<nav_msgs::msg::Odometry>("filtered_odom", 1);
-  tf_pub_ = create_publisher<tf2_msgs::msg::TFMessage>("/tf", 1);
+  if (cxt_.pub_odom_) {
+    filtered_odom_pub_ = create_publisher<nav_msgs::msg::Odometry>("filtered_odom", 1);
+  }
+  if (cxt_.pub_tf_map_base_ || cxt_.pub_tf_map_sensor_) {
+    tf_pub_ = create_publisher<tf2_msgs::msg::TFMessage>("/tf", 1);
+  }
 
-  // Monotonic subscriptions
-  sensor_pose_sub_ = create_subscription<geometry_msgs::msg::PoseWithCovarianceStamped>("sensor_pose",
-    [this](const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr msg) -> void { this->pose_cb_.call(msg); });
+  // Subscriptions
+  if (cxt_.sub_odom_) {
+    base_odom_sub_ = create_subscription<nav_msgs::msg::Odometry>("odom",
+      [this](const nav_msgs::msg::Odometry::SharedPtr msg) -> void { this->odom_cb_.call(msg); });
+  }
+  if (cxt_.sub_pose_) {
+    sensor_pose_sub_ = create_subscription<geometry_msgs::msg::PoseWithCovarianceStamped>("sensor_pose",
+      [this](const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr msg) -> void { this->pose_cb_.call(msg); });
+  }
 
   RCLCPP_INFO(get_logger(), "filter_node ready");
+}
+
+void FilterNode::base_odom_callback(const nav_msgs::msg::Odometry::SharedPtr msg, bool first)
+{
+  if (!first) {
+    // Robot pose
+    tf2::Transform t_map_base;
+    tf2::fromMsg(msg->pose.pose, t_map_base);
+
+    // Measurement and covariance matrices
+    Eigen::MatrixXd z, R;
+    to_z(t_map_base, z);
+    to_R(msg->pose.covariance, R);
+
+    // Process measurement
+    process(odom_cb_.curr(), odom_cb_.dt(), z, R);
+  }
 }
 
 // Process raw camera pose and publish estimated drone pose
@@ -164,64 +189,89 @@ void FilterNode::sensor_pose_callback(const geometry_msgs::msg::PoseWithCovarian
     // Robot pose
     tf2::Transform t_map_base = t_map_sensor * t_sensor_base_;
 
-    // Transfer function
-    auto dt = pose_cb_.dt();
-    auto dt2 = 0.5 * dt * dt;
-    Eigen::MatrixXd F(STATE_DIM, STATE_DIM);
-    F <<
-      1, 0, 0, 0, 0, 0, dt, 0, 0, 0, 0, 0, dt2, 0, 0, 0, 0, 0,
-      0, 1, 0, 0, 0, 0, 0, dt, 0, 0, 0, 0, 0, dt2, 0, 0, 0, 0,
-      0, 0, 1, 0, 0, 0, 0, 0, dt, 0, 0, 0, 0, 0, dt2, 0, 0, 0,
-      0, 0, 0, 1, 0, 0, 0, 0, 0, dt, 0, 0, 0, 0, 0, dt2, 0, 0,
-      0, 0, 0, 0, 1, 0, 0, 0, 0, 0, dt, 0, 0, 0, 0, 0, dt2, 0,
-      0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, dt, 0, 0, 0, 0, 0, dt2,
-
-      0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, dt, 0, 0, 0, 0, 0,
-      0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, dt, 0, 0, 0, 0,
-      0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, dt, 0, 0, 0,
-      0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, dt, 0, 0,
-      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, dt, 0,
-      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, dt,
-
-      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0,
-      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0,
-      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0,
-      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0,
-      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0,
-      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1;
-    filter_.set_F(F);
-
-    // Predict step
-    filter_.predict();
-
-    // Update step
+    // Measurement and covariance matrices
     Eigen::MatrixXd z, R;
     to_z(t_map_base, z);
     to_R(msg->pose.covariance, R);
-    filter_.update(z, R);
 
-    // Publish odometry with both pose and twist
-    if (count_subscribers(filtered_odom_pub_->get_topic_name()) > 0) {
-      nav_msgs::msg::Odometry filtered_odom_msg;
-      filtered_odom_msg.header = msg->header;
-      filtered_odom_msg.child_frame_id = cxt_.base_frame_;
-      x_to_pose(filter_.x(), filtered_odom_msg.pose.pose);
-      P_to_pose(filter_.P(), filtered_odom_msg.pose.covariance);
-      x_to_twist(filter_.x(), filtered_odom_msg.twist.twist);
-      P_to_twist(filter_.P(), filtered_odom_msg.twist.covariance);
-      filtered_odom_pub_->publish(filtered_odom_msg);
+    // Process measurement
+    process(pose_cb_.curr(), pose_cb_.dt(), z, R);
+  }
+}
+
+void FilterNode::process(const rclcpp::Time &stamp, const double dt, const Eigen::MatrixXd &z, const Eigen::MatrixXd &R)
+{
+  // Transfer function
+  auto dt2 = 0.5 * dt * dt;
+  Eigen::MatrixXd F(STATE_DIM, STATE_DIM);
+  F <<
+    1, 0, 0, 0, 0, 0, dt, 0, 0, 0, 0, 0, dt2, 0, 0, 0, 0, 0,
+    0, 1, 0, 0, 0, 0, 0, dt, 0, 0, 0, 0, 0, dt2, 0, 0, 0, 0,
+    0, 0, 1, 0, 0, 0, 0, 0, dt, 0, 0, 0, 0, 0, dt2, 0, 0, 0,
+    0, 0, 0, 1, 0, 0, 0, 0, 0, dt, 0, 0, 0, 0, 0, dt2, 0, 0,
+    0, 0, 0, 0, 1, 0, 0, 0, 0, 0, dt, 0, 0, 0, 0, 0, dt2, 0,
+    0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, dt, 0, 0, 0, 0, 0, dt2,
+
+    0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, dt, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, dt, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, dt, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, dt, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, dt, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, dt,
+
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1;
+  filter_.set_F(F);
+
+  // Predict step
+  filter_.predict();
+
+  // Update step
+  filter_.update(z, R);
+
+  // Publish odometry with pose and twist
+  if (cxt_.pub_odom_ && count_subscribers(filtered_odom_pub_->get_topic_name()) > 0) {
+    nav_msgs::msg::Odometry msg;
+
+    msg.header.stamp = stamp;
+    msg.header.frame_id = cxt_.map_frame_;
+    msg.child_frame_id = cxt_.base_frame_;
+
+    pose_from_x(filter_.x(), msg.pose.pose);
+    pose_covar_from_P(filter_.P(), msg.pose.covariance);
+    twist_from_x(filter_.x(), msg.twist.twist);
+    twist_covar_from_P(filter_.P(), msg.twist.covariance);
+
+    filtered_odom_pub_->publish(msg);
+  }
+
+  // Publish tf
+  if ((cxt_.pub_tf_map_base_ || cxt_.pub_tf_map_sensor_) && count_subscribers(tf_pub_->get_topic_name()) > 0) {
+    tf2_msgs::msg::TFMessage tf_msg;
+
+    geometry_msgs::msg::TransformStamped msg;
+    msg.header.stamp = stamp;
+    msg.header.frame_id = cxt_.map_frame_;
+
+    tf2::Transform t_map_base;
+    pose_from_x(filter_.x(), t_map_base);
+
+    if (cxt_.pub_tf_map_base_) {
+      msg.child_frame_id = cxt_.base_frame_;
+      msg.transform = tf2::toMsg(t_map_base);
+      tf_msg.transforms.emplace_back(msg);
+    }
+    if (cxt_.pub_tf_map_sensor_) {
+      msg.child_frame_id = cxt_.sensor_frame_;
+      msg.transform = tf2::toMsg(t_map_base * t_base_sensor_);
+      tf_msg.transforms.emplace_back(msg);
     }
 
-    // Publish tf
-    if (count_subscribers(tf_pub_->get_topic_name()) > 0) {
-      geometry_msgs::msg::TransformStamped transform_stamped_msg;
-      transform_stamped_msg.header = msg->header;
-      transform_stamped_msg.child_frame_id = cxt_.base_frame_;
-      x_to_pose(filter_.x(), transform_stamped_msg.transform.translation, transform_stamped_msg.transform.rotation);
-      tf2_msgs::msg::TFMessage tf_msg;
-      tf_msg.transforms.push_back(transform_stamped_msg);
-      tf_pub_->publish(tf_msg);
-    }
+    tf_pub_->publish(tf_msg);
   }
 }
 

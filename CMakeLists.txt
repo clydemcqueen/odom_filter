@@ -36,23 +36,15 @@ endif()
 
 # Find packages
 find_package(ament_cmake REQUIRED)
-find_package(builtin_interfaces REQUIRED)  # TODO need?
-find_package(Eigen3)  # TODO need?
+find_package(Eigen3)
 find_package(geometry_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(rclcpp REQUIRED)
-find_package(rclpy REQUIRED)
-find_package(std_msgs REQUIRED)
 find_package(tf2_msgs REQUIRED)
 
 # Local includes
 include_directories(
   include
-  ${Eigen3_INCLUDE_DIRS}  # TODO need?
-  ${geometry_msgs_INCLUDE_DIRS}
-  ${nav_msgs_INCLUDE_DIRS}
-  ${rclcpp_INCLUDE_DIRS}
-  ${tf2_msgs_INCLUDE_DIRS}
 )
 
 #=============
@@ -71,7 +63,6 @@ ament_target_dependencies(
   geometry_msgs
   nav_msgs
   rclcpp
-  std_msgs
   tf2_msgs
 )
 
