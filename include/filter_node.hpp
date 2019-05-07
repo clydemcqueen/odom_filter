@@ -9,36 +9,43 @@
 #include "tf2/LinearMath/Transform.h"
 #include "tf2_msgs/msg/tf_message.hpp"
 
+#include "filter_context.hpp"
 #include "kf.hpp"
+#include "monotonic.hpp"
 
 namespace filter_node {
 
-class FilterNode : public rclcpp::Node
+class FilterNode: public rclcpp::Node
 {
   // Parameters
-  std::string map_frame_;
-  std::string base_frame_;
+  FilterContext cxt_;
 
-  // Pose of base_frame in camera_frame
-  tf2::Transform t_camera_base_;
+  // Pose of base_frame in sensor frame
+  tf2::Transform t_sensor_base_;
 
   // Node state
   bool mission_;
   rclcpp::Time prev_stamp_;
   kf::KalmanFilter filter_;
 
-  // Subscriptions
-  rclcpp::Subscription<geometry_msgs::msg::PoseWithCovarianceStamped>::SharedPtr camera_pose_sub_;
-
   // Publications
   rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr filtered_odom_pub_;
   rclcpp::Publisher<tf2_msgs::msg::TFMessage>::SharedPtr tf_pub_;
 
-  void camera_pose_callback(const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr msg);
+  // Subscriptions
+  rclcpp::Subscription<geometry_msgs::msg::PoseWithCovarianceStamped>::SharedPtr sensor_pose_sub_;
+
+  // Callbacks
+  void sensor_pose_callback(const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr msg, bool first);
+
+  // Callback wrappers
+  Monotonic<FilterNode *, const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr> pose_cb_{this,
+    &FilterNode::sensor_pose_callback};
 
 public:
 
   explicit FilterNode();
+
   ~FilterNode() {}
 };
 

@@ -62,6 +62,7 @@ include_directories(
 add_executable(
   filter_node
   src/filter_node.cpp
+  src/filter_context.cpp
   src/kf.cpp
 )
 
