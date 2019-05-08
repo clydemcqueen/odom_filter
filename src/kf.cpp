@@ -4,7 +4,7 @@
 
 namespace kf {
 
-KalmanFilter::KalmanFilter(int state_dim, int measurement_dim) :
+KalmanFilter::KalmanFilter(int state_dim, int measurement_dim):
   state_dim_{state_dim},
   measurement_dim_{measurement_dim}
 {
@@ -89,6 +89,12 @@ void KalmanFilter::update(const Eigen::MatrixXd &z, const Eigen::MatrixXd &R)
   S_ = H_ * PHT + R;
   K_ = PHT * S_.inverse();
   y_ = z - H_ * x_;
+
+  // Normalize the angles in y
+  y_(3, 0) = norm_angle(y_(3, 0));
+  y_(4, 0) = norm_angle(y_(4, 0));
+  y_(5, 0) = norm_angle(y_(5, 0));
+
   x_ = x_ + K_ * y_;
   P_ = P_ - K_ * H_ * P_;  // Should be P = (I - KH)P, but might be unstable?
 
