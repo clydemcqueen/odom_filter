@@ -5,6 +5,19 @@
 
 namespace kf {
 
+// Move an angle to the region [-M_PI, M_PI]
+constexpr double norm_angle(double a)
+{
+  while (a < -M_PI) {
+    a += 2 * M_PI;
+  }
+  while (a > M_PI) {
+    a -= 2 * M_PI;
+  }
+
+  return a;
+}
+
 class KalmanFilter
 {
   int state_dim_;

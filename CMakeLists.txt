@@ -15,7 +15,7 @@ if(NOT CMAKE_CXX_STANDARD)
   set(CMAKE_CXX_STANDARD 14)
 endif()
 
-# Emulate colcon in CLion
+# Emulate colcon in CLion TODO simplify
 if($ENV{CLION_IDE})
   message("Running inside CLion")
   find_package(fastrtps_cmake_module REQUIRED)
