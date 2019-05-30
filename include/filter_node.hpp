@@ -11,46 +11,49 @@
 #include "kf.hpp"
 #include "monotonic.hpp"
 
-namespace filter_node {
-
-class FilterNode: public rclcpp::Node
+namespace filter_node
 {
-  // Parameters
-  FilterContext cxt_;
 
-  // Transform base to sensor
-  tf2::Transform t_sensor_base_;
-  tf2::Transform t_base_sensor_;
+  class FilterNode : public rclcpp::Node
+  {
+    // Parameters
+    FilterContext cxt_;
 
-  // Kalman filter
-  kf::KalmanFilter filter_;
+    // Transform base to sensor
+    tf2::Transform t_sensor_base_;
+    tf2::Transform t_base_sensor_;
 
-  // Publications
-  rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr filtered_odom_pub_;
-  rclcpp::Publisher<tf2_msgs::msg::TFMessage>::SharedPtr tf_pub_;
+    // Kalman filter
+    kf::KalmanFilter filter_;
 
-  // Subscriptions
-  rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr base_odom_sub_;
-  rclcpp::Subscription<geometry_msgs::msg::PoseWithCovarianceStamped>::SharedPtr sensor_pose_sub_;
+    // Publications
+    rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr filtered_odom_pub_;
+    rclcpp::Publisher<tf2_msgs::msg::TFMessage>::SharedPtr tf_pub_;
 
-  // Callbacks
-  void base_odom_callback(const nav_msgs::msg::Odometry::SharedPtr msg, bool first);
-  void sensor_pose_callback(const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr msg, bool first);
+    // Subscriptions
+    rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr base_odom_sub_;
+    rclcpp::Subscription<geometry_msgs::msg::PoseWithCovarianceStamped>::SharedPtr sensor_pose_sub_;
 
-  // Callback wrappers
-  Monotonic<FilterNode *, const nav_msgs::msg::Odometry::SharedPtr> odom_cb_{this,
-    &FilterNode::base_odom_callback};
-  Monotonic<FilterNode *, const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr> pose_cb_{this,
-    &FilterNode::sensor_pose_callback};
+    // Callbacks
+    void base_odom_callback(const nav_msgs::msg::Odometry::SharedPtr msg, bool first);
 
-  void process(const rclcpp::Time &stamp, const double dt, const Eigen::MatrixXd &z, const Eigen::MatrixXd &R);
+    void sensor_pose_callback(const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr msg, bool first);
 
-public:
+    // Callback wrappers
+    Monotonic<FilterNode *, const nav_msgs::msg::Odometry::SharedPtr> odom_cb_{this,
+                                                                               &FilterNode::base_odom_callback};
+    Monotonic<FilterNode *, const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr> pose_cb_{this,
+                                                                                                     &FilterNode::sensor_pose_callback};
 
-  explicit FilterNode();
+    void process(const rclcpp::Time &stamp, const double dt, const Eigen::MatrixXd &z, const Eigen::MatrixXd &R);
 
-  ~FilterNode() {}
-};
+  public:
+
+    explicit FilterNode();
+
+    ~FilterNode()
+    {}
+  };
 
 } // namespace filter_node
 

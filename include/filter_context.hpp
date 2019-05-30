@@ -7,12 +7,15 @@
 
 #include "context_macros.hpp"
 
-namespace rclcpp {
-class Node;
-class Parameter;
+namespace rclcpp
+{
+  class Node;
+
+  class Parameter;
 }
 
-namespace filter_node {
+namespace filter_node
+{
 
 #define CXT_MACRO_ALL_PARAMS \
   CXT_ELEM(sub_odom, true, bool)                            /* Subscribe to odom, assume map => base  */ \
@@ -34,15 +37,16 @@ namespace filter_node {
   CXT_ELEM(t_sensor_base_yaw, 0, double)                    /* Transform sensor to base  */ \
 /* End of list */
 
-struct FilterContext
-{
+  struct FilterContext
+  {
 #undef CXT_ELEM
 #define CXT_ELEM(n, a...) CXT_PARAM_FIELD_DEF(n, a)
-  CXT_MACRO_ALL_PARAMS
+    CXT_MACRO_ALL_PARAMS
 
-  void load_parameters(rclcpp::Node &node);
-  void change_parameters(rclcpp::Node &node, std::vector<rclcpp::Parameter> parameters);
-};
+    void load_parameters(rclcpp::Node &node);
+
+    void change_parameters(rclcpp::Node &node, std::vector<rclcpp::Parameter> parameters);
+  };
 
 } // namespace filter_node
 
