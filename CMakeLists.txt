@@ -6,33 +6,33 @@ project(odom_filter)
 #=============
 
 # Default to C99
-if(NOT CMAKE_C_STANDARD)
+if (NOT CMAKE_C_STANDARD)
   set(CMAKE_C_STANDARD 99)
-endif()
+endif ()
 
 # Default to C++14
-if(NOT CMAKE_CXX_STANDARD)
+if (NOT CMAKE_CXX_STANDARD)
   set(CMAKE_CXX_STANDARD 14)
-endif()
+endif ()
 
 # Emulate colcon in CLion TODO simplify
-if($ENV{CLION_IDE})
+if ($ENV{CLION_IDE})
   message("Running inside CLion")
   find_package(fastrtps_cmake_module REQUIRED)
   set(FastRTPS_INCLUDE_DIR "/opt/ros/crystal/include")
   set(FastRTPS_LIBRARY_RELEASE "/opt/ros/crystal/lib/libfastrtps.so")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DRUN_INSIDE_CLION")
-endif()
+endif ()
 
 # Debugging: set _dump_all_variables to true
 set(_dump_all_variables false)
-if(_dump_all_variables)
+if (_dump_all_variables)
   get_cmake_property(_variable_names VARIABLES)
   list(SORT _variable_names)
-  foreach(_variable_name ${_variable_names})
+  foreach (_variable_name ${_variable_names})
     message(STATUS "${_variable_name}=${${_variable_name}}")
-  endforeach()
-endif()
+  endforeach ()
+endif ()
 
 # Find packages
 find_package(ament_cmake REQUIRED)

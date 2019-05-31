@@ -3,61 +3,86 @@
 
 #include "eigen3/Eigen/Dense"
 
-namespace kf {
+namespace kf
+{
 
 // Move an angle to the region [-M_PI, M_PI]
-constexpr double norm_angle(double a)
-{
-  while (a < -M_PI) {
-    a += 2 * M_PI;
+  constexpr double norm_angle(double a)
+  {
+    while (a < -M_PI) {
+      a += 2 * M_PI;
+    }
+    while (a > M_PI) {
+      a -= 2 * M_PI;
+    }
+
+    return a;
   }
-  while (a > M_PI) {
-    a -= 2 * M_PI;
-  }
 
-  return a;
-}
+  class KalmanFilter
+  {
+    int state_dim_;
+    int measurement_dim_;
 
-class KalmanFilter
-{
-  int state_dim_;
-  int measurement_dim_;
+    Eigen::MatrixXd x_;   // State mean
+    Eigen::MatrixXd P_;   // State covariance
+    Eigen::MatrixXd Q_;   // Process covariance
+    Eigen::MatrixXd F_;   // State transition function
+    Eigen::MatrixXd H_;   // Measurement function
+    Eigen::MatrixXd K_;   // Kalman gain
+    Eigen::MatrixXd y_;   // Residual
+    Eigen::MatrixXd S_;   // System uncertainty
 
-  Eigen::MatrixXd x_;   // State mean
-  Eigen::MatrixXd P_;   // State covariance
-  Eigen::MatrixXd Q_;   // Process covariance
-  Eigen::MatrixXd F_;   // State transition function
-  Eigen::MatrixXd H_;   // Measurement function
-  Eigen::MatrixXd K_;   // Kalman gain
-  Eigen::MatrixXd y_;   // Residual
-  Eigen::MatrixXd S_;   // System uncertainty
+  public:
+    explicit KalmanFilter(int state_dim, int measurement_dim);
 
-public:
-  explicit KalmanFilter(int state_dim, int measurement_dim);
+    ~KalmanFilter()
+    {}
 
-  ~KalmanFilter() {}
+    const auto &x() const
+    { return x_; }
 
-  const auto &x() const { return x_; }
-  const auto &P() const { return P_; }
-  const auto &Q() const { return Q_; }
-  const auto &F() const { return F_; }
-  const auto &H() const { return H_; }
-  const auto &K() const { return K_; }
-  const auto &y() const { return y_; }
-  const auto &S() const { return S_; }
+    const auto &P() const
+    { return P_; }
 
-  void set_x(const Eigen::MatrixXd &x);
-  void set_P(const Eigen::MatrixXd &P);
-  void set_Q(const Eigen::MatrixXd &Q);
-  void set_F(const Eigen::MatrixXd &F);
-  void set_H(const Eigen::MatrixXd &H);
-  void set_K(const Eigen::MatrixXd &K);
-  void set_y(const Eigen::MatrixXd &y);
-  void set_S(const Eigen::MatrixXd &S);
+    const auto &Q() const
+    { return Q_; }
 
-  void predict();
-  void update(const Eigen::MatrixXd &z, const Eigen::MatrixXd &R);
-};
+    const auto &F() const
+    { return F_; }
+
+    const auto &H() const
+    { return H_; }
+
+    const auto &K() const
+    { return K_; }
+
+    const auto &y() const
+    { return y_; }
+
+    const auto &S() const
+    { return S_; }
+
+    void set_x(const Eigen::MatrixXd &x);
+
+    void set_P(const Eigen::MatrixXd &P);
+
+    void set_Q(const Eigen::MatrixXd &Q);
+
+    void set_F(const Eigen::MatrixXd &F);
+
+    void set_H(const Eigen::MatrixXd &H);
+
+    void set_K(const Eigen::MatrixXd &K);
+
+    void set_y(const Eigen::MatrixXd &y);
+
+    void set_S(const Eigen::MatrixXd &S);
+
+    void predict();
+
+    void update(const Eigen::MatrixXd &z, const Eigen::MatrixXd &R);
+  };
 
 } // namespace kf
 
