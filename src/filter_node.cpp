@@ -116,7 +116,15 @@ namespace filter_node
     Node{"filter_node"},
     filter_{STATE_DIM, MEASUREMENT_DIM}
   {
-    cxt_.load_parameters(*this);
+    // Get parameters
+#undef CXT_MACRO_MEMBER
+#define CXT_MACRO_MEMBER(n, t, d) CXT_MACRO_LOAD_PARAMETER((*this), cxt_, n, t, d)
+    CXT_MACRO_INIT_PARAMETERS(FILTER_NODE_ALL_PARAMS, validate_parameters)
+
+    // Register parameters
+#undef CXT_MACRO_MEMBER
+#define CXT_MACRO_MEMBER(n, t, d) CXT_MACRO_PARAMETER_CHANGED(cxt_, n, t)
+    CXT_MACRO_REGISTER_PARAMETERS_CHANGED((*this), FILTER_NODE_ALL_PARAMS, validate_parameters)
 
     // Get t_sensor_base from parameters
     if (cxt_.sub_pose_ || cxt_.pub_tf_map_sensor_) {
@@ -151,21 +159,24 @@ namespace filter_node
 
     // Subscriptions
     if (cxt_.sub_odom_) {
-      base_odom_sub_ = create_subscription<nav_msgs::msg::Odometry>("odom",
-                                                                    [this](
-                                                                      const nav_msgs::msg::Odometry::SharedPtr msg) -> void
-                                                                    { this->odom_cb_.call(msg); });
+      base_odom_sub_ = create_subscription<nav_msgs::msg::Odometry>(
+        "odom", 1, [this](const nav_msgs::msg::Odometry::SharedPtr msg) -> void
+        { this->odom_cb_.call(msg); });
     }
     if (cxt_.sub_pose_) {
-      sensor_pose_sub_ = create_subscription<geometry_msgs::msg::PoseWithCovarianceStamped>("sensor_pose",
-                                                                                            [this](
-                                                                                              const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr msg) -> void
-                                                                                            {
-                                                                                              this->pose_cb_.call(msg);
-                                                                                            });
+      sensor_pose_sub_ = create_subscription<geometry_msgs::msg::PoseWithCovarianceStamped>(
+        "sensor_pose", 1, [this](const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr msg) -> void
+        { this->pose_cb_.call(msg); });
     }
 
     RCLCPP_INFO(get_logger(), "filter_node ready");
+  }
+
+  void FilterNode::validate_parameters()
+  {
+#undef CXT_MACRO_MEMBER
+#define CXT_MACRO_MEMBER(n, t, d) CXT_MACRO_LOG_PARAMETER(RCLCPP_INFO, get_logger(), cxt_, n, t, d)
+    FILTER_NODE_ALL_PARAMS
   }
 
   void FilterNode::base_odom_callback(const nav_msgs::msg::Odometry::SharedPtr msg, bool first)
