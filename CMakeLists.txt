@@ -15,12 +15,13 @@ if (NOT CMAKE_CXX_STANDARD)
   set(CMAKE_CXX_STANDARD 14)
 endif ()
 
-# Emulate colcon in CLion TODO simplify
+# Emulate colcon in CLion
 if ($ENV{CLION_IDE})
   message("Running inside CLion")
   find_package(fastrtps_cmake_module REQUIRED)
-  set(FastRTPS_INCLUDE_DIR "/opt/ros/crystal/include")
-  set(FastRTPS_LIBRARY_RELEASE "/opt/ros/crystal/lib/libfastrtps.so")
+  set(FastRTPS_INCLUDE_DIR "/opt/ros/dashing/include")
+  set(FastRTPS_LIBRARY_RELEASE "/opt/ros/dashing/lib/libfastrtps.so")
+  set(ros2_shared_DIR "${PROJECT_SOURCE_DIR}/../../../install/ros2_shared/share/ros2_shared/cmake")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DRUN_INSIDE_CLION")
 endif ()
 
@@ -40,6 +41,7 @@ find_package(Eigen3)
 find_package(geometry_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(rclcpp REQUIRED)
+find_package(ros2_shared REQUIRED)
 find_package(tf2_msgs REQUIRED)
 
 # Local includes
@@ -54,7 +56,6 @@ include_directories(
 add_executable(
   filter_node
   src/filter_node.cpp
-  src/filter_context.cpp
   src/kf.cpp
 )
 
@@ -63,6 +64,7 @@ ament_target_dependencies(
   geometry_msgs
   nav_msgs
   rclcpp
+  ros2_shared
   tf2_msgs
 )
 

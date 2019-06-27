@@ -40,12 +40,14 @@ namespace filter_node
     void sensor_pose_callback(const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr msg, bool first);
 
     // Callback wrappers
-    Monotonic<FilterNode *, const nav_msgs::msg::Odometry::SharedPtr> odom_cb_{this,
-                                                                               &FilterNode::base_odom_callback};
-    Monotonic<FilterNode *, const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr> pose_cb_{this,
-                                                                                                     &FilterNode::sensor_pose_callback};
+    Monotonic<FilterNode *, const nav_msgs::msg::Odometry::SharedPtr> odom_cb_
+      {this, &FilterNode::base_odom_callback};
+    Monotonic<FilterNode *, const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr> pose_cb_
+      {this, &FilterNode::sensor_pose_callback};
 
     void process(const rclcpp::Time &stamp, const double dt, const Eigen::MatrixXd &z, const Eigen::MatrixXd &R);
+
+    void validate_parameters();
 
   public:
 
